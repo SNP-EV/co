@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>楼宇监控门禁管理系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft Yahei", sans-serif; }
+        body { display: flex; height: 100vh; overflow: hidden; }
+
+        /* 左侧楼层导航 */
+        .sidebar { width: 200px; background: #2f3542; color: #fff; padding: 20px; overflow-y: scroll; }
+        .sidebar h3 { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #57606f; }
+        
+        /* 全局统计 - 放在左侧最上面 */
+        .global-stat-sidebar {
+            background: rgba(255,255,255,0.1);
+            padding: 3px 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .global-stat-sidebar strong {
+            font-size: 14px;
+        }
+        .camera-total { color: #ffeb3b; }
+        .door-total { color: #4caf50; }
+
+        /* 区域统计 */
+        .area-stat {
+            background: rgba(255,255,255,0.05);
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            line-height: 1.5;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .area-stat span {
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .camera-count { color: #ffeb3b; }
+        .door-count { color: #4caf50; }
+        
+        .floor-btn {
+            display: block; width: 100%; padding: 10px; margin: 8px 0;
+            background: #57606f; border: none; color: #fff; border-radius: 4px;
+            cursor: pointer; text-align: left;
+        }
+        .floor-btn.active, .building-btn.active { background: #1e90ff; color: #fff; }
+        .floor-btn:hover { background: #747d8c; }
+
+        /* 按钮区域 —— 强区分样式 */
+        .btn-block {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .excel-btn {
+            width: 100%;
+            padding: 10px 12px;
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: left;
+            transition: background 0.2s;
+        }
+        /* 当前监控 —— 紫色 */
+        .excel-camera-curr {
+            background: #7744cc;
+            border-left: 6px solid #5522aa;
+        }
+        .excel-camera-curr:hover {
+            background: #8855dd;
+        }
+        /* 全部监控 —— 深蓝 */
+        .excel-camera-all {
+            background: #0066cc;
+            border-left: 6px solid #004499;
+        }
+        .excel-camera-all:hover {
+            background: #0077dd;
+        }
+        /* 当前门禁 —— 土黄 */
+        .excel-door-curr {
+            background: #ffaa00;
+            border-left: 6px solid #cc8800;
+        }
+        .excel-door-curr:hover {
+            background: #ffbb11;
+        }
+        /* 全部门禁 —— 橙色 */
+        .excel-door-all {
+            background: #ff6600;
+            border-left: 6px solid #dd4400;
+        }
+        .excel-door-all:hover {
+            background: #ff7711;
+        }
+        /* 下载 —— 绿色 */
+        .excel-download {
+            background: #00aa33;
+            border-left: 6px solid #008822;
+        }
+        .excel-download:hover {
+            background: #00bb44;
+        }
+
+        /* 顶部 */
+        .topbar {
+            height: 60px; background: #1e90ff; color: #fff;
+            display: flex; align-items: center; padding: 0 20px;
+            justify-content: space-between;
+        }
+        
+        .building-group {
+            display: flex; align-items: center; gap: 15px;
+        }
+        .building-btn {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #ffffff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .building-btn.active {
+            background: #1e90ff;
+            color: #fff;
+        }
+
+        /* 主内容 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .floor-container {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            padding: 20px;
+            background: #f1f2f6;
+        }
+        .floor-img {
+            max-width: 100%;
+            max-height: 90vh;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* 设备容器 - 新增：用于包裹图标和序号 */
+        .device-wrapper {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            cursor: move;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* 设备图标 - 扩展到6种监控图标 */
+        .device-icon {
+            width: 32px;
+            height: 32px;
+            z-index: 11;
+        }
+        /* 设备序号标签 */
+.device-label {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 225, 0, 0.9); /* 门禁：红色 */
+    color: #fff;
+    font-size: 7px;
+    font-weight: bold;
+    padding: 0.4px 2px;
+    border-radius: 3px;
+    border: 1px solid #000;
+    white-space: nowrap;
+    z-index: 12;
+}
+/* 监控单独改成黄色 */
+.device-icon[class*="camera-"] + .device-label {
+    background: rgba(255, 255, 0, 0.9);
+    color: #000;
+}
+        /* 监控图标样式 */
+        .camera-1 {
+            background: url("./图标/监控图标1.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-2 {
+            background: url("./图标/监控图标2.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-3 {
+            background: url("./图标/监控图标3.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-4 {
+            background: url("./图标/监控图标4.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-5 {
+            background: url("./图标/监控图标5.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-6 {
+            background: url("./图标/监控图标6.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-7 {
+            background: url("./图标/监控图标3b.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+        .camera-8 {
+            background: url("./图标/监控图标5b.png") no-repeat center center;
+            background-size: 100% 100%;
+        }
+
+        .door {
+            background: url("./图标/门禁图标.png") no-repeat center center;
+            background-size: 40% 60%;
+        }
+
+        /* 提示框 —— 允许鼠标进入，不消失，可复制 */
+        .tooltip {
+            position: fixed;
+            display: none;
+            z-index: 9999;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            max-width: 300px;
+            word-wrap: break-word;
+            word-break: break-all;
+            line-height: 1.4;
+            /* 关键：允许鼠标进入 */
+            pointer-events: auto;
+        }
+        .tooltip::after {
+            content: ''; position: absolute; left: 10px; top: 15px;
+            border-right: 8px solid #fff; border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+        }
+
+        /* 坐标工具 */
+        .coord-tool {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(255,255,255,0.15);
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+        .coord-tool input {
+            width: 60px; padding: 3px 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+        .coord-tool button {
+            padding: 3px 8px; font-size: 12px; border: none; border-radius: 3px; cursor: pointer;
+            background: rgba(255,255,255,0.3); color: #fff;
+        }
+        .coord-tool button.active {
+            background: #fff;
+            color: #1e90ff;
+        }
+
+        /* 自动消失的提示框样式 */
+        .auto-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            z-index: 99999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .auto-toast.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <!-- 全局总数 放在最上面 -->
+        <div class="global-stat-sidebar">
+            <strong>全局统计</strong><br>
+            <span class="camera-total">监控：<strong id="globalCameraCount">0</strong> 个</span><br>
+            <span class="door-total">门禁：<strong id="globalDoorCount">0</strong> 个</span>
+        </div>
+
+        <h3>楼层选择</h3>
+        
+        <!-- 当前区域统计 -->
+        <div class="area-stat" id="areaStat">
+            <span>当前区域：<strong id="currentAreaName">未选择</strong></span><br>
+            <span class="camera-count">监控：<strong id="areaCameraCount">0</strong> 个</span>
+            <span class="door-count">门禁：<strong id="areaDoorCount">0</strong> 个</span>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="topbar" id="topbar">
+            <div class="building-group">
+                <h3 style="margin-right:20px;">楼宇选择</h3>
+            </div>
+            <div class="coord-tool">
+                X: <input type="text" id="coordX" readonly>
+                Y: <input type="text" id="coordY" readonly>
+                <button id="copyCoord">复制</button>
+                <button id="togglePick">拾取</button>
+            </div>
+        </div>
+
+        <div class="floor-container" id="floorContainer"></div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+    <!-- 自动消失的提示框 -->
+    <div id="autoToast" class="auto-toast"></div>
+
+    <script>
+        const config = {
+            img: {
+                "AAA": { "1层": "./图片/AAA1层.jpg", "1夹层": "./图片/AAA1夹层.jpg", "2层": "./图片/AAA2层.jpg", "2夹层": "./图片/AAA2夹层.jpg" , "3层": "./图片/3层.jpg"},
+                "BBB": { "餐厅1层": "./图片/BBB餐厅1层.jpg", "餐厅2层": "./图片/BBB餐厅2层.jpg" },
+                "CCC": { "配电室": "./图片/CCC配电室.jpg" },
+                "DDD": { "DDD": "./图片/DDD.jpg" },
+                "EEE": { "EEE": "./图片/EEE.jpg" },
+                "FFF": { "FFF": "./图片/总平面图.jpg" }
+
+            },
+            devices: [
+                // 每个监控新增 serial 字段，自定义序号（数字/字母都可以）
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "1夹层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "2夹层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+
+
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "AAA", floor: "3层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+
+
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "号楼", floor: "餐厅1层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅1层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "号楼", floor: "餐厅2层", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "BBB", floor: "餐厅2层", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "CCC", floor: "配电室", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "DDD", floor: "DDD", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "EEE", floor: "EEE", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 1, serial: "001", x: 150, y: 150, info: { 机身序列号: "CAM-001", 编号: "1F-CAM-01", 位置: "大厅入口", IP: "192.168.1.101", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 2, serial: "002", x: 200, y: 200, info: { 机身序列号: "CAM-002", 编号: "1F-CAM-02", 位置: "1层大厅2号", IP: "192.168.1.102", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 3, serial: "003", x: 284, y: 289, info: { 机身序列号: "CAM-003", 编号: "1F-CAM-03", 位置: "1层大厅3号", IP: "192.168.1.103", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 4, serial: "004", x: 887, y: 134, info: { 机身序列号: "CAM-004", 编号: "1F-CAM-04", 位置: "FFF", IP: "192.168.1.104", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 5, serial: "005", x: 260, y: 200, info: { 机身序列号: "CAM-005", 编号: "1F-CAM-05", 位置: "1夹层5号", IP: "192.168.1.105", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 6, serial: "006", x: 360, y: 300, info: { 机身序列号: "CAM-006", 编号: "2F-CAM-06", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 7, serial: "007", x: 500, y: 500, info: { 机身序列号: "CAM-007", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+                { building: "FFF", floor: "FFF", type: "camera", cameraType: 8, serial: "008", x: 400, y: 500, info: { 机身序列号: "CAM-008", 编号: "2F-CAM-07", 位置: "2层6号", IP: "192.168.1.106", 用户名: "admin", 密码: "******" } },
+
+                { building: "AAA", floor: "1层", type: "door", serial: "01", x: 743, y: 347, info: { 编号: "6F-DOOR-01", 位置: "正门", 授权: "员工", IP: "192.168.1.245" } },
+                { building: "AAA", floor: "1层", type: "door", serial: "02", x: 620, y: 390, info: { 编号: "6F-DOOR-02", 位置: "好望角会议室", 授权: "员工", IP: "192.168.1.246" } },
+                { building: "AAA", floor: "1层", type: "door", serial: "03", x: 520, y: 300, info: { 编号: "6F-DOOR-03", 位置: "机房门", 授权: "运维人员", IP: "192.168.1.247" } },
+                { building: "AAA", floor: "1层", type: "door", serial: "04", x: 440, y: 500, info: { 编号: "6F-DOOR-04", 位置: "档案室门", 授权: "管理层", IP: "192.168.1.248" } },
+                { building: "AAA", floor: "1层", type: "door", serial: "05", x: 360, y: 500, info: { 编号: "6F-DOOR-05", 位置: "消防通道门", 授权: "紧急", IP: "192.168.1.249" } },
+                { building: "AAA", floor: "1层", type: "door", serial: "06", x: 280, y: 500, info: { 编号: "6F-DOOR-06", 位置: "文印室门", 授权: "行政人员", IP: "192.168.1.250" } },
+
+                { building: "AAA", floor: "1夹层", type: "door", serial: "01", x: 743, y: 347, info: { 编号: "6F-DOOR-01", 位置: "正门", 授权: "员工", IP: "192.168.1.245" } },
+                { building: "AAA", floor: "1夹层", type: "door", serial: "02", x: 620, y: 390, info: { 编号: "6F-DOOR-02", 位置: "好望角会议室", 授权: "员工", IP: "192.168.1.246" } },
+                { building: "AAA", floor: "1夹层", type: "door", serial: "03", x: 520, y: 300, info: { 编号: "6F-DOOR-03", 位置: "机房门", 授权: "运维人员", IP: "192.168.1.247" } },
+                { building: "AAA", floor: "1夹层", type: "door", serial: "04", x: 440, y: 500, info: { 编号: "6F-DOOR-04", 位置: "档案室门", 授权: "管理层", IP: "192.168.1.248" } },
+                { building: "AAA", floor: "1夹层", type: "door", serial: "05", x: 360, y: 500, info: { 编号: "6F-DOOR-05", 位置: "消防通道门", 授权: "紧急", IP: "192.168.1.249" } },
+                { building: "AAA", floor: "1夹层", type: "door", serial: "06", x: 280, y: 500, info: { 编号: "6F-DOOR-06", 位置: "文印室门", 授权: "行政人员", IP: "192.168.1.250" } },
+
+            ]
+        };
+
+        let currentBuilding = "";
+        let currentFloor = "";
+        let isPickMode = false;
+        let lockedCoord = { x: "", y: "" };
+        let tooltipTimeout = null;
+        // 拖拽相关变量
+        let dragging = false;
+        let dragTarget = null;
+        let dragOffset = { x: 0, y: 0 };
+        // 提示框定时器
+        let toastTimer = null;
+
+        const excelFilePath = "./台账/明细.xlsx";
+
+        window.onload = function () {
+            addExcelButtons();
+            renderBuildingButtons();
+            bindCoordEvents();
+            // 初始化全局统计
+            updateGlobalStat();
+        };
+
+        // 显示自动消失的提示框
+        function showToast(message, duration = 2000) {
+            const toast = document.getElementById("autoToast");
+            toast.textContent = message;
+            toast.classList.add("show");
+            
+            // 清除之前的定时器
+            if (toastTimer) clearTimeout(toastTimer);
+            
+            // 设置自动隐藏
+            toastTimer = setTimeout(() => {
+                toast.classList.remove("show");
+            }, duration);
+        }
+
+        // 新增：更新全局设备统计
+        function updateGlobalStat() {
+            const totalCameras = config.devices.filter(d => d.type === "camera").length;
+            const totalDoors = config.devices.filter(d => d.type === "door").length;
+            
+            document.getElementById("globalCameraCount").textContent = totalCameras;
+            document.getElementById("globalDoorCount").textContent = totalDoors;
+        }
+
+        // 新增：更新当前区域设备统计
+        function updateAreaStat(building, floor) {
+            if (!building || !floor) {
+                document.getElementById("currentAreaName").textContent = "未选择";
+                document.getElementById("areaCameraCount").textContent = 0;
+                document.getElementById("areaDoorCount").textContent = 0;
+                return;
+            }
+            
+            // 更新区域名称
+            document.getElementById("currentAreaName").textContent = `${building}-${floor}`;
+            
+            // 统计当前区域设备数量
+            const areaDevices = config.devices.filter(d => d.building === building && d.floor === floor);
+            const areaCameras = areaDevices.filter(d => d.type === "camera").length;
+            const areaDoors = areaDevices.filter(d => d.type === "door").length;
+            
+            // 更新显示
+            document.getElementById("areaCameraCount").textContent = areaCameras;
+            document.getElementById("areaDoorCount").textContent = areaDoors;
+        }
+
+        // 左侧按钮
+        function addExcelButtons() {
+            const sidebar = document.getElementById("sidebar");
+            const block = document.createElement("div");
+            block.className = "btn-block";
+
+            const btnCamCurr = document.createElement("button");
+            btnCamCurr.className = "excel-btn excel-camera-curr";
+            btnCamCurr.textContent = "查看当前楼层监控";
+            btnCamCurr.onclick = () => { openCameraTable(false); };
+
+            const btnCamAll = document.createElement("button");
+            btnCamAll.className = "excel-btn excel-camera-all";
+            btnCamAll.textContent = "查看全部监控";
+            btnCamAll.onclick = () => { openCameraTable(true); };
+
+            const btnDoorCurr = document.createElement("button");
+            btnDoorCurr.className = "excel-btn excel-door-curr";
+            btnDoorCurr.textContent = "查看当前楼层门禁";
+            btnDoorCurr.onclick = () => { openDoorTable(false); };
+
+            const btnDoorAll = document.createElement("button");
+            btnDoorAll.className = "excel-btn excel-door-all";
+            btnDoorAll.textContent = "查看全部门禁";
+            btnDoorAll.onclick = () => { openDoorTable(true); };
+
+            const downBtn = document.createElement("button");
+            downBtn.className = "excel-btn excel-download";
+            downBtn.textContent = "下载Excel台账";
+            downBtn.onclick = () => {
+                const a = document.createElement("a");
+                a.href = excelFilePath;
+                a.download = "监控门禁明细台账.xlsx";
+                a.click();
+            };
+
+            block.appendChild(btnCamCurr);
+            block.appendChild(btnCamAll);
+            block.appendChild(btnDoorCurr);
+            block.appendChild(btnDoorAll);
+            block.appendChild(downBtn);
+            sidebar.appendChild(block);
+        }
+
+        // 打开监控表
+        function openCameraTable(isAll) {
+            let list = config.devices.filter(d => d.type === "camera");
+            if (!isAll) {
+                list = list.filter(d => d.building === currentBuilding && d.floor === currentFloor);
+            }
+            renderCameraTable(list, isAll ? "全部监控台账" : `${currentBuilding}-${currentFloor}监控台账`);
+        }
+
+        // 打开门禁表
+        function openDoorTable(isAll) {
+            let list = config.devices.filter(d => d.type === "door");
+            if (!isAll) {
+                list = list.filter(d => d.building === currentBuilding && d.floor === currentFloor);
+            }
+            renderDoorTable(list, isAll ? "全部门禁台账" : `${currentBuilding}-${currentFloor}门禁台账`);
+        }
+
+        // 渲染监控（表格里也显示自定义序号）
+        function renderCameraTable(deviceList, title) {
+            let html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+body{font-family:Microsoft Yahei;padding:20px;}
+table{border-collapse:collapse;width:100%;margin-top:10px;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+td{word-wrap:break-word;word-break:break-all;}
+th{background:#1e90ff;color:#fff;}
+h2{color:#333;}
+.empty{text-align:center;margin-top:30px;color:#666;}
+</style>
+</head>
+<body>
+<h2>${title}</h2>`;
+
+            if (deviceList.length === 0) {
+                html += '<div class="empty">当前无监控设备</div></body></html>';
+                const blob = new Blob([html], { type: "text/html" });
+                window.open(URL.createObjectURL(blob), "_blank");
+                return;
+            }
+
+            html += `
+<table>
+<tr>
+    <th>监控序号</th>
+    <th>编号</th>
+    <th>类型</th>
+    <th>所在楼层</th>
+    <th>位置</th>
+    <th>IP地址</th>
+    <th>用户名</th>
+    <th>密码</th>
+    <th>机身序列号</th>
+</tr>`;
+
+            deviceList.forEach((d, index) => {
+                // 扩展到6种监控类型名称
+                let typeName = "其他监控";
+                if (d.cameraType === 1) typeName = "球机";
+                else if (d.cameraType === 2) typeName = "半球机";
+                else if (d.cameraType === 3) typeName = "枪机";
+                else if (d.cameraType === 4) typeName = "室外无线";
+                else if (d.cameraType === 5) typeName = "双镜头";
+                else if (d.cameraType === 6) typeName = "室内楼梯间";
+                else if (d.cameraType === 7) typeName = "枪机";
+                else if (d.cameraType === 8) typeName = "双镜头";
+                let floorText = d.building + " " + d.floor;
+
+                html += `
+<tr>
+    <td>${d.serial || "未设置"}</td> <!-- 显示自定义序号 -->
+    <td>${d.info.编号 || ""}</td>
+    <td>${typeName}</td>
+    <td>${floorText}</td>
+    <td>${d.info.位置 || ""}</td>
+    <td>${d.info.IP || ""}</td>
+    <td>${d.info.用户名 || ""}</td>
+    <td>${d.info.密码 || ""}</td>
+    <td>${d.info.机身序列号 || ""}</td>
+</tr>`;
+            });
+
+            html += "</table></body></html>";
+            const blob = new Blob([html], { type: "text/html" });
+            window.open(URL.createObjectURL(blob), "_blank");
+        }
+
+        // 渲染门禁
+        function renderDoorTable(deviceList, title) {
+            let html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+body{font-family:Microsoft Yahei;padding:20px;}
+table{border-collapse:collapse;width:100%;margin-top:10px;}
+th,td{border:1px solid #ccc;padding:8px;text-align:center;}
+td{word-wrap:break-word;word-break:break-all;}
+th{background:#1e90ff;color:#fff;}
+h2{color:#333;}
+.empty{text-align:center;margin-top:30px;color:#666;}
+</style>
+</head>
+<body>
+<h2>${title}</h2>`;
+
+            if (deviceList.length === 0) {
+                html += '<div class="empty">当前无门禁设备</div></body></html>';
+                const blob = new Blob([html], { type: "text/html" });
+                window.open(URL.createObjectURL(blob), "_blank");
+                return;
+            }
+
+            html += `
+<table>
+<tr>
+    <th>门禁序号</th>
+    <th>编号</th>
+    <th>所在楼层</th>
+    <th>位置</th>
+    <th>IP地址</th>
+    <th>授权人员</th>
+</tr>`;
+
+            deviceList.forEach((d, index) => {
+                let floorText = d.building + " " + d.floor;
+                html += `
+<tr>
+    <td>${d.serial || index + 1}</td> <!-- 优先显示自定义序号，无则用索引 -->
+    <td>${d.info.编号 || ""}</td>
+    <td>${floorText}</td>
+    <td>${d.info.位置 || ""}</td>
+    <td>${d.info.IP || ""}</td>
+    <td>${d.info.授权 || ""}</td>
+</tr>`;
+            });
+
+            html += "</table></body></html>";
+            const blob = new Blob([html], { type: "text/html" });
+            window.open(URL.createObjectURL(blob), "_blank");
+        }
+
+        // 楼宇
+        function renderBuildingButtons() {
+            const group = document.querySelector(".building-group");
+            const buildings = Object.keys(config.img);
+            buildings.forEach(b => {
+                const btn = document.createElement("button");
+                btn.className = "building-btn";
+                btn.textContent = b;
+                btn.onclick = () => {
+                    document.querySelectorAll(".building-btn").forEach(x => x.classList.remove("active"));
+                    btn.classList.add("active");
+                    currentBuilding = b;
+                    renderFloorButtons(b);
+                };
+                group.appendChild(btn);
+                if (buildings.indexOf(b) === 0) btn.click();
+            });
+        }
+
+        // 楼层
+        function renderFloorButtons(building) {
+            const sidebar = document.getElementById("sidebar");
+            document.querySelectorAll(".floor-btn").forEach(el => el.remove());
+            const floors = Object.keys(config.img[building]);
+            const btnBlock = document.querySelector(".btn-block");
+            floors.forEach(f => {
+                const btn = document.createElement("button");
+                btn.className = "floor-btn";
+                btn.textContent = f;
+                btn.onclick = () => {
+                    document.querySelectorAll(".floor-btn").forEach(x => x.classList.remove("active"));
+                    btn.classList.add("active");
+                    currentFloor = f;
+                    renderFloorContent(building, f);
+                    // 更新区域统计
+                    updateAreaStat(building, f);
+                };
+                if (btnBlock) sidebar.insertBefore(btn, btnBlock);
+                else sidebar.appendChild(btn);
+                if (floors.indexOf(f) === 0) btn.click();
+            });
+        }
+
+        // 渲染楼层图
+        function renderFloorContent(building, floor) {
+            const ctn = document.getElementById("floorContainer");
+            ctn.innerHTML = "";
+            const img = document.createElement("img");
+            img.src = config.img[building][floor];
+            img.className = "floor-img";
+            ctn.appendChild(img);
+            renderDevices(building, floor);
+        }
+
+        // 渲染设备点 —— 新增序号显示 + 保留拖拽功能
+        function renderDevices(building, floor) {
+            const ctn = document.getElementById("floorContainer");
+            const list = config.devices.filter(d => d.building === building && d.floor === floor);
+            const tip = document.getElementById("tooltip");
+            const coordX = document.getElementById("coordX");
+            const coordY = document.getElementById("coordY");
+
+            // 鼠标离开提示框才隐藏
+            tip.onmouseleave = () => {
+                tip.style.display = "none";
+            };
+
+            list.forEach((dev, devIndex) => {
+                // 1. 创建设备容器（包裹图标和序号）
+                const wrapper = document.createElement("div");
+                wrapper.className = "device-wrapper";
+                wrapper.style.left = dev.x + "px";
+                wrapper.style.top = dev.y + "px";
+                // 存储设备数据到容器上
+                wrapper.dataset.deviceIndex = devIndex;
+                wrapper.dataset.building = building;
+                wrapper.dataset.floor = floor;
+
+                // 2. 创建设备图标
+                const icon = document.createElement("div");
+                if (dev.type === "camera") {
+                    // 支持1-6种监控类型
+                    const t = dev.cameraType || 1;
+                    icon.className = `device-icon camera-${t}`;
+                } else {
+                    icon.className = "device-icon door";
+                }
+                wrapper.appendChild(icon);
+
+                // 3. 创建序号标签（核心新增）
+                const label = document.createElement("div");
+                label.className = "device-label";
+                // 监控使用自定义serial，门禁优先用serial，无则用索引+1
+                const serial = dev.type === "camera" 
+                    ? (dev.serial || "未设置") 
+                    : (dev.serial || (devIndex + 1));
+                label.textContent = serial;
+                wrapper.appendChild(label);
+
+                // 拖拽功能绑定到容器上（整体拖拽）
+                wrapper.addEventListener("mousedown", startDrag);
+                document.addEventListener("mousemove", drag);
+                document.addEventListener("mouseup", endDrag);
+
+                // 悬浮提示框
+                wrapper.addEventListener("mouseenter", e => {
+                    clearTimeout(tooltipTimeout);
+                    let html = "";
+
+                    if (dev.type === "camera") {
+                        // 监控：显示自定义序号
+                        html += `<strong>监控</strong><br>`;
+                        html += `监控序号：${dev.serial || "未设置"}<br>`;
+                        html += `编号：${dev.info.编号 || ""}<br>`;
+                        html += `机身序列号：${dev.info.机身序列号 || ""}<br>`;
+                        html += `位置：${dev.info.位置 || ""}<br>`;
+                        html += `IP：${dev.info.IP || ""}<br>`;
+                        html += `用户名：${dev.info.用户名 || ""}<br>`;
+                        html += `密码：${dev.info.密码 || ""}<br>`;
+                    } else {
+                        // 门禁 - 修复：将错误的 d.info 改为 dev.info
+                        html += `<strong>门禁</strong><br>`;
+                        html += `门禁序号：${dev.serial || (devIndex + 1)}<br>`;
+                        html += `编号：${dev.info.编号 || ""}<br>`;
+                        html += `位置：${dev.info.位置 || ""}<br>`;
+                        html += `授权：${dev.info.授权 || ""}<br>`;
+                        html += `IP：${dev.info.IP || ""}<br>`;
+                    }
+
+                    tip.innerHTML = html;
+                    tip.style.display = "block";
+
+                    const tipWidth = tip.offsetWidth;
+                    const tipHeight = tip.offsetHeight;
+                    const windowWidth = window.innerWidth;
+                    const windowHeight = window.innerHeight;
+
+                    let left = e.pageX + 10;
+                    let top = e.pageY + 10;
+
+                    if (left + tipWidth > windowWidth) left = e.pageX - tipWidth - 10;
+                    if (top + tipHeight > windowHeight) top = e.pageY - tipHeight - 10;
+
+                    tip.style.left = left + "px";
+                    tip.style.top = top + "px";
+                });
+
+                // 鼠标离开设备，延迟隐藏提示框
+                wrapper.addEventListener("mouseleave", () => {
+                    tooltipTimeout = setTimeout(() => {
+                        if (!tip.matches(':hover')) {
+                            tip.style.display = "none";
+                        }
+                    }, 100);
+                });
+
+                // 移除点击弹窗
+                wrapper.addEventListener("click", () => {});
+                
+                // 添加到容器
+                ctn.appendChild(wrapper);
+            });
+
+            // 开始拖拽
+            function startDrag(e) {
+                // 阻止事件冒泡，避免触发其他事件
+                e.preventDefault();
+                e.stopPropagation();
+                
+                dragging = true;
+                dragTarget = e.target.closest('.device-wrapper'); // 找到最外层容器
+                if (!dragTarget) return;
+                
+                // 计算鼠标相对于容器的偏移量
+                const rect = dragTarget.getBoundingClientRect();
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+                
+                // 拖拽时提升层级
+                dragTarget.style.zIndex = 100;
+                // 拖拽时改变光标
+                dragTarget.style.cursor = "grabbing";
+            }
+
+            // 拖拽中
+            function drag(e) {
+                if (!dragging || !dragTarget) return;
+                
+                // 计算容器新位置
+                const containerRect = ctn.getBoundingClientRect();
+                const newX = e.clientX - containerRect.left - dragOffset.x + (dragTarget.offsetWidth / 2);
+                const newY = e.clientY - containerRect.top - dragOffset.y + (dragTarget.offsetHeight / 2);
+                
+                // 更新容器位置
+                dragTarget.style.left = newX + "px";
+                dragTarget.style.top = newY + "px";
+                
+                // 实时更新坐标显示
+                coordX.value = Math.round(newX);
+                coordY.value = Math.round(newY);
+            }
+
+            // 结束拖拽
+            function endDrag(e) {
+                if (!dragging || !dragTarget) return;
+                
+                dragging = false;
+                // 恢复光标和层级
+                dragTarget.style.cursor = "move";
+                dragTarget.style.zIndex = 10;
+                
+                // 更新config中的设备坐标
+                const newX = Math.round(parseFloat(dragTarget.style.left));
+                const newY = Math.round(parseFloat(dragTarget.style.top));
+                const deviceIndex = dragTarget.dataset.deviceIndex;
+                const building = dragTarget.dataset.building;
+                const floor = dragTarget.dataset.floor;
+                
+                // 找到对应设备并更新坐标
+                const targetDevice = config.devices.find(d => 
+                    d.building === building && 
+                    d.floor === floor && 
+                    config.devices.indexOf(d) == deviceIndex
+                );
+                
+                if (targetDevice) {
+                    targetDevice.x = newX;
+                    targetDevice.y = newY;
+                    // 锁定坐标
+                    lockedCoord.x = newX;
+                    lockedCoord.y = newY;
+                    // 提示坐标更新
+                    console.log(`设备坐标已更新：x=${newX}, y=${newY}`);
+                }
+                
+                dragTarget = null;
+            }
+        }
+
+        // 坐标拾取
+        function bindCoordEvents() {
+            const ctn = document.getElementById("floorContainer");
+            const cx = document.getElementById("coordX");
+            const cy = document.getElementById("coordY");
+            const copyBtn = document.getElementById("copyCoord");
+            const toggleBtn = document.getElementById("togglePick");
+
+            toggleBtn.onclick = () => {
+                isPickMode = !isPickMode;
+                toggleBtn.textContent = isPickMode ? "关闭" : "拾取";
+                toggleBtn.classList.toggle("active", isPickMode);
+                ctn.style.cursor = isPickMode ? "crosshair" : "default";
+                if (!isPickMode) {
+                    lockedCoord = { x: "", y: "" };
+                    cx.value = "";
+                    cy.value = "";
+                }
+            };
+
+            ctn.addEventListener("mousemove", e => {
+                if (!isPickMode) return;
+                const r = ctn.getBoundingClientRect();
+                const tx = Math.round(e.clientX - r.left);
+                const ty = Math.round(e.clientY - r.top);
+                if (!lockedCoord.x) {
+                    cx.value = tx;
+                    cy.value = ty;
+                }
+            });
+
+            ctn.addEventListener("click", e => {
+                if (!isPickMode) return;
+                const r = ctn.getBoundingClientRect();
+                lockedCoord.x = Math.round(e.clientX - r.left);
+                lockedCoord.y = Math.round(e.clientY - r.top);
+                cx.value = lockedCoord.x;
+                cy.value = lockedCoord.y;
+                // 替换alert为自动消失的提示框
+                showToast(`已锁定坐标：x: ${lockedCoord.x}, y: ${lockedCoord.y}`, 2000);
+            });
+
+            copyBtn.onclick = () => {
+                const fx = lockedCoord.x || cx.value;
+                const fy = lockedCoord.y || cy.value;
+                if (!fx || !fy) {
+                    showToast("请先拾取坐标！", 2000);
+                    return;
+                }
+                const txt = `x: ${fx}, y: ${fy}`;
+                navigator.clipboard.writeText(txt).then(() => {
+                    showToast("已复制：" + txt, 2000);
+                }).catch(() => {
+                    showToast("复制失败，请手动复制", 2000);
+                });
+            };
+        }
+    </script>
+</body>
+</html>
